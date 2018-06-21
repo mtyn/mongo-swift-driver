@@ -78,6 +78,12 @@ public struct CountOptions: Encodable {
 	}
 }
 
+/// Options to use when executing an `estimatedDocumentCount` command on a `MongoCollection`.
+public struct EstimatedDocumentCountOptions {
+	/// The maximum amount of time to allow the query to run.
+	public let maxTimeMS: Int64?
+}
+
 /// Options to use when executing a `distinct` command on a `MongoCollection`.
 public struct DistinctOptions: Encodable {
 	/// Specifies a collation.
@@ -218,6 +224,95 @@ public struct FindOptions: Encodable {
 	}
 }
 
+/// Options to use when performing a bulk write operation on a `MongoCollection`.
+public struct BulkWriteOptions {
+	/// If `true`, when an insert fails, return without performing the remaining writes.
+	/// If false, when a write fails, continue with the remaining writes, if any.
+	/// Defaults to `true`.
+	public var ordered: Bool = true
+
+	/// If true, allows the write to opt-out of document level validation.
+	public let bypassDocumentValidation: Bool?
+}
+
+/// A protocol indicating write types that can be batched together.
+public protocol WriteModel {}
+
+/// A model for an `insertOne` command.
+public struct InsertOneModel: WriteModel {
+	/// The `Document` to insert.
+	public let document: Document
+}
+
+/// A model for a `deleteOne` command.
+public struct DeleteOneModel: WriteModel {
+	/// A `Document` representing the match criteria.
+	public let filter: Document
+
+	/// Specifies a collation.
+	public let collation: Document?
+}
+
+/// A model for a `deleteMany` command.
+public struct DeleteManyModel: WriteModel {
+	/// A `Document` representing the match criteria.
+	public let filter: Document
+
+	/// Specifies a collation.
+	public let collation: Document?
+}
+
+/// A model for a `replaceOne` command.
+public struct ReplaceOneModel: WriteModel {
+	/// A `Document` representing the match criteria.
+	public let filter: Document
+
+	/// The `Document` with which to replace the matched document.
+	public let replacement: Document
+
+	/// Specifies a collation.
+	public let collation: Document?
+
+	/// When true, creates a new document if no document matches the query.
+	public let upsert: Bool?
+}
+
+/// A model for an `updateOne` command.
+public struct UpdateOneModel: WriteModel {
+	/// A `Document` representing the match criteria.
+	public let filter: Document
+
+	/// A `Document` containing update operators.
+	public let update: Document
+
+	/// A set of filters specifying to which array elements an update should apply.
+	public let arrayFilters: [Document]?
+
+	/// Specifies a collation.
+	public let collation: Document?
+
+	/// When `true`, creates a new document if no document matches the query.
+	public let upsert: Bool?
+}
+
+/// A model for an `updateMany` command.
+public struct UpdateManyModel: WriteModel {
+	/// A `Document` representing the match criteria.
+	public let filter: Document
+
+	/// A `Document` containing update operators.
+	public let update: Document
+
+	/// A set of filters specifying to which array elements an update should apply.
+	public let arrayFilters: [Document]?
+
+	/// Specifies a collation.
+	public let collation: Document?
+
+	/// When `true`, creates a new document if no document matches the query.
+	public let upsert: Bool?
+}
+
 /// Options to use when executing an `insertOne` command on a `MongoCollection`.
 public struct InsertOneOptions: Encodable {
 	/// If true, allows the write to opt-out of document level validation.
@@ -238,9 +333,9 @@ public struct InsertManyOptions: Encodable {
 	/// If true, allows the write to opt-out of document level validation.
 	public let bypassDocumentValidation: Bool?
 
-	/// If true, when an insert fails, return without performing the remaining
-	/// writes. If false, when a write fails, continue with the remaining writes, if any.
-	/// Defaults to true.
+	/// If `true`, when an insert fails, return without performing the remaining writes.
+	/// If false, when a write fails, continue with the remaining writes, if any.
+	/// Defaults to `true`.
 	public var ordered: Bool = true
 
 	/// An optional WriteConcern to use for the command.
@@ -319,6 +414,104 @@ public struct DeleteOptions: Encodable {
 		self.collation = collation
 		self.writeConcern = writeConcern
 	}
+}
+
+/// Indicates which document to return in a find and modify operation.
+public enum ReturnDocument {
+	/// Indicates to return the document before the update, replacement, or insert occured.
+	case before
+
+	///  Indicates to return the document after the update, replacement, or insert occured.
+	case after
+}
+
+/// Options to use when executing a `findOneAndDelete` command on a `MongoCollection`. 
+public struct FindOneAndDeleteOptions {
+	/// Specifies a collation.
+	public let collation: Document?
+
+	/// The maximum amount of time to allow the query to run.
+	public let maxTimeMS: Int64?
+
+	/// Limits the fields to return for all matching documents.
+	public let projection: Document?
+
+	/// The order in which to return matching documents.
+	public let sort: Document?
+}
+
+/// Options to use when executing a `findOneAndReplace` command on a `MongoCollection`. 
+public struct FindOneAndReplaceOptions {
+	/// If true, allows the write to opt-out of document level validation.
+	public let bypassDocumentValidation: Bool?
+
+	/// Specifies a collation.
+	public let collation: Document?
+
+	/// The maximum amount of time to allow the query to run.
+	public let maxTimeMS: Int64?
+
+	/// Limits the fields to return for all matching documents.
+	public let projection: Document?
+
+	/// When ReturnDocument.After, returns the replaced or inserted document rather than the original.
+	public let returnDocument: ReturnDocument?
+
+	/// The order in which to return matching documents.
+	public let sort: Document?
+
+	/// When true, creates a new document if no document matches the query.
+	public let upsert: Bool?
+}
+
+public struct FindOneAndUpdateOptions {
+	/// A set of filters specifying to which array elements an update should apply.
+	public let arrayFilters: [Document]?
+
+	/// If true, allows the write to opt-out of document level validation.
+	public let bypassDocumentValidation: Bool?
+
+	/// Specifies a collation.
+	public let collation: Document?
+
+	/// The maximum amount of time to allow the query to run.
+	public let maxTimeMS: Int64?
+
+	/// Limits the fields to return for all matching documents.
+	public let projection: Document?
+
+	/// When ReturnDocument.After, returns the updated or inserted document rather than the original.
+	public let returnDocument: ReturnDocument?
+
+	/// The order in which to return matching documents.
+	public let sort: Document?
+
+	/// When true, creates a new document if no document matches the query.
+	public let upsert: Bool?
+}
+
+/// The result of a bulk write operation on a `MongoCollection`.
+public struct BulkWriteResult: Decodable {
+	/// Number of documents inserted.
+	public let insertedCount: Int
+
+	/// Map of the index of the operation to the id of the inserted document.
+	public let insertedIds: [Int: AnyBsonValue]
+
+	/// Number of documents matched for update.
+	public let matchedCount: Int
+
+	/// Number of documents modified.
+	public let modifiedCount: Int
+
+	/// Number of documents deleted.
+	public let deletedCount: Int
+
+	/// Number of documents upserted.
+	public let upsertedCount: Int
+
+	/// Map of the index of the operation to the id of the upserted document.
+	public let upsertedIds: [Int: AnyBsonValue]
 }
 
 /// The result of an `insertOne` command on a `MongoCollection`. 

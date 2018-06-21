@@ -2,6 +2,8 @@ import libmongoc
 
 /// An extension of `MongoCollection` encapsulating CRUD operations.
 extension MongoCollection {
+	////// Read Operations //////
+
 	/**
 	 * Finds the documents in this collection which match the provided filter.
 	 *
@@ -46,6 +48,7 @@ extension MongoCollection {
 
 	/**
 	 * Counts the number of documents in this collection matching the provided filter.
+	 * This method is DEPRECATED and should not be used in new code.
 	 *
 	 * - Parameters:
 	 *   - filter: a `Document`, the filter that documents must match in order to be counted
@@ -53,6 +56,7 @@ extension MongoCollection {
 	 *
 	 * - Returns: The count of the documents that matched the filter
 	 */
+	@available(*, deprecated)
 	public func count(_ filter: Document = [:], options: CountOptions? = nil) throws -> Int {
 		let opts = try BsonEncoder().encode(options)
 		var error = bson_error_t()
@@ -64,6 +68,31 @@ extension MongoCollection {
 		if count == -1 { throw MongoError.commandError(message: toErrorString(error)) }
 
 		return Int(count)
+	}
+
+	/**
+	 * Counts the number of documents in this collection matching the provided filter. 
+	 *
+	 * - Parameters:
+	 *   - filter: a `Document`, the filter that documents must match in order to be counted
+	 *   - options: Optional `CountOptions` to use when executing the command
+	 *
+	 * - Returns: The count of the documents that matched the filter
+	 */
+	public func countDocuments(_ filter: Document = [:], options: CountOptions? = nil) throws -> Int {
+		throw MongoError.commandError(message: "Unimplemented command")
+	}
+
+	/**
+	 * Gets an estimate of the count of documents in this collection using collection metadata.
+	 *
+	 * - Parameters:
+	 *	 - options: Optional `EstimatedDocumentCountOptions` to use when executing the command
+	 *
+	 * - Returns: an estimate of the count of documents in this collection
+	 */
+	public func estimatedDocumentCount(options: EstimatedDocumentCountOptions? = nil) throws -> Int {
+		throw MongoError.commandError(message: "Unimplemented command")
 	}
 
 	/**
@@ -114,6 +143,22 @@ extension MongoCollection {
 		}
 
 		return MongoCursor(fromCursor: newCursor, withClient: client)
+	}
+
+	////// Write Operations //////
+
+	/**
+	 * Sends a batch of writes to the server at the same time.
+	 *
+	 * - Parameters:
+	 *	 - requests: an [WriteModel] containing the writes to perform
+	 *	 - options: optional `BulkWriteOptions` to use while executing the operation
+	 * - Returns: a `BulkWriteResult`
+	 * - Throws: an error if `requests` is empty, or if any error occurs while performing the writes
+	 */
+	@discardableResult
+	public func bulkWrite(_ requests: [WriteModel], options: BulkWriteOptions? = nil) throws -> BulkWriteResult {
+		throw MongoError.commandError(message: "Unimplemented command")
 	}
 
 	/**
@@ -273,7 +318,7 @@ extension MongoCollection {
 	 * Deletes multiple documents
 	 *
 	 * - Parameters:
-	 *   - filter: Document representing the match criteria
+	 *   - filter: `Document` representing the match criteria
 	 *   - options: Optional `UpdateOptions` to use when executing the command
 	 *
 	 * - Returns: The optional result of performing the deletion. If the `WriteConcern` is
@@ -291,4 +336,54 @@ extension MongoCollection {
 		}
 		return DeleteResult(from: reply)
 	}
+
+	////// Find and Modify Operations //////
+
+	/**
+	 * Finds a single document and deletes it, returning the original.
+	 *
+	 * - Parameters:
+	 *   - filter: `Document` representing the match criteria
+	 *   - options: Optional `FindOneAndDeleteOptions` to use when executing the command
+	 *
+	 * - Returns: The deleted document, or `nil` if no document was deleted.
+	 */
+	@discardableResult
+	public func findOneAndDelete(_ filter: Document, options: FindOneAndDeleteOptions? = nil) throws -> Document? {
+		throw MongoError.commandError(message: "Unimplemented command")
+	}
+
+
+	/**
+	 * Finds a single document and replaces it, returning either the original or the replaced document.
+	 * 
+	 * - Parameters:
+	 *   - filter: `Document` representing the match criteria
+	 *   - replacement: a `Document` to replace the found one
+	 *   - options: Optional `FindOneAndReplaceOptions` to use when executing the command
+	 *
+	 * - Returns: Either the original document or its replacement depending on selected options, 
+	 * 			  or nil if there was no match.
+	 */
+	@discardableResult
+	public func findOneAndReplace(filter: Document, replacement: Document, options: FindOneAndDeleteOptions? = nil) throws -> Document? {
+		throw MongoError.commandError(message: "Unimplemented command")
+	}
+
+	/**
+	 * Finds a single document and updates it, returning either the original or the updated document.
+	 * 
+	 * - Parameters:
+	 *   - filter: `Document` representing the match criteria
+	 *   - replacement: a `Document` to replace the found one
+	 *   - options: Optional `FindOneAndReplaceOptions` to use when executing the command
+	 *
+	 * - Returns: Either the original or updated document depending on selected options, 
+	 * 			  or nil if there was no match.
+	 */
+	@discardableResult
+	public func findOneAndUpdate(filter: Document, update: Document, options: FindOneAndUpdateOptions? = nil) throws -> Document? {
+		throw MongoError.commandError(message: "Unimplemented command")
+	}
+
 }
