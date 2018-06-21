@@ -228,7 +228,7 @@ public class WriteConcern: Codable {
         if let w = w {
             switch w {
             case let .number(wNumber):
-                mongoc_write_concern_set_w(self._writeConcern, wNumber) 
+                mongoc_write_concern_set_w(self._writeConcern, wNumber)
             case let .tag(wTag):
                 mongoc_write_concern_set_wtag(self._writeConcern, wTag)
             case .majority:
