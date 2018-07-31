@@ -1,7 +1,8 @@
 import Foundation
 import libbson
 
-internal class DocumentStorage {
+/// The storage class backing `Document` structs.
+public class DocumentStorage {
     internal var pointer: UnsafeMutablePointer<bson_t>!
 
     init() {
@@ -27,24 +28,12 @@ public struct Document: ExpressibleByDictionaryLiteral, ExpressibleByArrayLitera
 
     /// Returns a `[String]` containing the keys in this `Document`.
     public var keys: [String] {
-        var iter: bson_iter_t = bson_iter_t()
-        if !bson_iter_init(&iter, data) { return [] }
-        var keys = [String]()
-        while bson_iter_next(&iter) {
-            keys.append(String(cString: bson_iter_key(&iter)))
-        }
-        return keys
+        return self.makeIterator().keys
     }
 
     /// Returns a `[BsonValue?]` containing the values stored in this `Document`.
     public var values: [BsonValue?] {
-        var iter: bson_iter_t = bson_iter_t()
-        if !bson_iter_init(&iter, data) { return [] }
-        var values = [BsonValue?]()
-        while bson_iter_next(&iter) {
-            values.append(nextBsonValue(iter: &iter))
-        }
-        return values
+        return self.makeIterator().values
     }
 
     /// Returns the number of (key, value) pairs stored at the top level
@@ -191,11 +180,8 @@ public struct Document: ExpressibleByDictionaryLiteral, ExpressibleByArrayLitera
      */
     public subscript(key: String) -> BsonValue? {
         get {
-            var iter: bson_iter_t = bson_iter_t()
-            if bson_iter_init_find(&iter, self.data, key.cString(using: .utf8)) {
-                return nextBsonValue(iter: &iter)
-            }
-            return nil
+            guard let iter = DocumentIterator(forDocument: self, andFind: key) else { return nil }
+            return iter.currentValue
         }
 
         set(newValue) {
@@ -209,7 +195,7 @@ public struct Document: ExpressibleByDictionaryLiteral, ExpressibleByArrayLitera
             }
 
             do {
-                try value.encode(to: self.data, forKey: key)
+                try value.encode(to: self.storage, forKey: key)
             } catch {
                 preconditionFailure("Failed to set the value for key \(key) to \(value): \(error)")
             }
@@ -271,13 +257,13 @@ public struct Document: ExpressibleByDictionaryLiteral, ExpressibleByArrayLitera
 extension Document: BsonValue {
     public var bsonType: BsonType { return .document }
 
-    public func encode(to data: UnsafeMutablePointer<bson_t>, forKey key: String) throws {
-        if !bson_append_document(data, key, Int32(key.count), self.data) {
+    public func encode(to storage: DocumentStorage, forKey key: String) throws {
+        if !bson_append_document(storage.pointer, key, Int32(key.count), self.data) {
             throw bsonEncodeError(value: self, forKey: key)
         }
     }
 
-    public static func from(iter: inout bson_iter_t) -> BsonValue {
+    public init(from iter: DocumentIterator) throws {
         var length: UInt32 = 0
         let document = UnsafeMutablePointer<UnsafePointer<UInt8>?>.allocate(capacity: 1)
         defer {
@@ -285,13 +271,13 @@ extension Document: BsonValue {
             document.deallocate(capacity: 1)
         }
 
-        bson_iter_document(&iter, &length, document)
+        bson_iter_document(&iter.iter, &length, document)
 
         guard let docData = bson_new_from_data(document.pointee, Int(length)) else {
             preconditionFailure("Failed to create a bson_t from document data")
         }
 
-        return Document(fromPointer: docData)
+        self = Document(fromPointer: docData)
     }
 
 }
@@ -323,25 +309,132 @@ extension Document: CustomStringConvertible {
 extension Document: Sequence {
     /// Returns a `DocumentIterator` over the values in this `Document`. 
     public func makeIterator() -> DocumentIterator {
-        return DocumentIterator(forDocument: self)
-    }
-
-    /// An iterator over the values in a `Document`. 
-    public class DocumentIterator: IteratorProtocol {
-        internal var iter: bson_iter_t
-
-        internal init(forDocument doc: Document) {
-            self.iter = bson_iter_t()
-            bson_iter_init(&self.iter, doc.data)
-        }
-
-        /// Returns the next value in the sequence, or `nil` if at the end.
-        public func next() -> (String, BsonValue?)? {
-            if bson_iter_next(&self.iter) {
-                let key = String(cString: bson_iter_key(&self.iter))
-                return (key, nextBsonValue(iter: &self.iter))
-            }
-            return nil
-        }
+        return Iterator(forDocument: self)
     }
 }
+
+/// An iterator over the values in a `Document`. 
+public class DocumentIterator: IteratorProtocol {
+    // must be a var because we use it as an inout argument
+    internal var iter: bson_iter_t
+
+    /**
+     * Initializes a new iterator over the provided document. The document's backing `DocumentStorage`
+     * must remain valid for the lifetime of the iterator, and modifying the `Document` while using the
+     * iterator is an error.
+     * 
+     * - Params:
+     *   - doc: the `Document` to traverse
+     */
+    internal init(forDocument doc: Document) {
+        self.iter = bson_iter_t()
+        if !bson_iter_init(&self.iter, doc.data) {
+            preconditionFailure("Failed to initialize an iterator for document \(doc)")
+        }
+    }
+
+    /**
+     * Initializes a new iterator over the provided document and advances it to the specified
+     * key. Returns nil if the iterator cannot be initialized or if the key is not found.
+     * The document's backing `DocumentStorage` must remain valid for the lifetime of the iterator,
+     * and modifying the `Document` while using the iterator is an error.
+     * 
+     * - Params:
+     *   - doc: the `Document` to traverse
+     *   - key: the `String` key to advance the iterator to
+     */
+    internal init?(forDocument doc: Document, andFind key: String) {
+        self.iter = bson_iter_t()
+        if !bson_iter_init_find(&iter, doc.data, key.cString(using: .utf8)) { return nil }
+    }
+
+    /// Advances the iterator to the next value. 
+    /// Returns true if the iterator was successfully advanced.
+    /// Returns false if the end of the document was reached or invalid BSON data was encountered.
+    private func advance() -> Bool {
+        return bson_iter_next(&self.iter)
+    }
+
+    /// Advances the iterator to the end and returns a list of the keys traversed.
+    internal var keys: [String] {
+        var keys = [String]()
+        while self.advance() {
+            keys.append(self.currentKey)
+        }
+        return keys
+    }
+
+    /// Advances the iterator to the end and returns a list of the values traversed.
+    internal var values: [BsonValue?] {
+        var values = [BsonValue?]()
+        while self.advance() {
+            values.append(self.currentValue)
+        }
+        return values
+    }
+
+    /// Returns the key for the element the iterator is currently on. Assumes that the
+    /// iterator is at a valid location, i.e. the latest call to `advance` returned true.
+    internal var currentKey: String {
+        guard let key = bson_iter_key(&self.iter) else {
+            preconditionFailure("Failed to retrieve key for value with BSON type \(self.currentType)")
+        }
+        return String(cString: key)
+    }
+
+    /// Returns the value for the element the iterator is currently on. Assumes that the
+    /// iterator is at a valid location, i.e. the latest call to `advance` returned true.
+    internal var currentValue: BsonValue? {
+        // note: encountering an unknown BSON type will result in returning nil here.
+        guard let typeToReturn = BsonTypeMap[self.currentType] else { return nil }
+
+        do {
+            switch typeToReturn {
+            case is Symbol.Type:
+                return try Symbol.asString(from: self)
+            case is DBPointer.Type:
+                return try DBPointer.asDocument(from: self)
+            default:
+                return try typeToReturn.init(from: self)
+            }
+        } catch {
+            preconditionFailure("Failed to initialize type \(typeToReturn): \(error)")
+        }
+    }
+
+    /// Returns the type of the element the iterator is currently on. Assumes that the
+    /// iterator is at a valid location, i.e. the latest call to `advance` returned true.
+    internal var currentType: UInt32 {
+        return bson_iter_type(&self.iter).rawValue
+    }
+
+    /// Returns the next value in the sequence, or `nil` if at the end.
+    public func next() -> (String, BsonValue?)? {
+        if self.advance() {
+            return (self.currentKey, self.currentValue)
+        }
+        return nil
+    }
+}
+
+internal let BsonTypeMap: [UInt32: BsonValue.Type] = [
+    0x01: Double.self,
+    0x02: String.self,
+    0x03: Document.self,
+    0x04: [BsonValue?].self,
+    0x05: Binary.self,
+    0x07: ObjectId.self,
+    0x08: Bool.self,
+    0x09: Date.self,
+    0x0b: RegularExpression.self,
+    0x0c: DBPointer.self,
+    0x0d: CodeWithScope.self,
+    0x0e: Symbol.self,
+    0x0f: CodeWithScope.self,
+    0x10: Int.self,
+    0x11: Timestamp.self,
+    0x12: Int64.self,
+    0x13: Decimal128.self,
+    0xff: MinKey.self,
+    0x7f: MaxKey.self
+]

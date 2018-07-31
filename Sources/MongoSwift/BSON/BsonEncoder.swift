@@ -508,6 +508,8 @@ private class MutableArray: BsonValue {
 
     var array = [BsonValue?]()
 
+    init() {}
+
     fileprivate func add(_ value: BsonValue?) {
         array.append(value)
     }
@@ -518,14 +520,14 @@ private class MutableArray: BsonValue {
         self.array.insert(value, at: index)
     }
 
-    func encode(to data: UnsafeMutablePointer<bson_t>, forKey key: String) throws {
-        try self.array.encode(to: data, forKey: key)
+    func encode(to storage: DocumentStorage, forKey key: String) throws {
+        try self.array.encode(to: storage, forKey: key)
     }
 
     /// methods required by the BsonValue protocol that we don't actually need/use. MutableArray
     /// is just a BsonValue to simplify usage alongside true BsonValues within the encoder.
-    static func from(iter: inout bson_iter_t) -> BsonValue {
-        fatalError("MutableArray is not meant to be initialized from a bson_iter_t")
+    required convenience init(from iter: DocumentIterator) throws {
+        fatalError("`MutableArray` is not meant to be initialized from a `DocumentIterator`")
     }
     func encode(to encoder: Encoder) throws {
         fatalError("`MutableArray` is not meant to be encoded with an `Encoder`")
@@ -545,6 +547,8 @@ private class MutableDictionary: BsonValue {
     // rather than using a dictionary, do this so we preserve key orders
     var keys = [String]()
     var values = [BsonValue?]()
+
+    init() {}
 
     subscript(key: String) -> BsonValue? {
         get {
@@ -566,14 +570,14 @@ private class MutableDictionary: BsonValue {
         return doc
     }
 
-    func encode(to data: UnsafeMutablePointer<bson_t>, forKey key: String) throws {
-        try self.asDocument().encode(to: data, forKey: key)
+    func encode(to storage: DocumentStorage, forKey key: String) throws {
+        try self.asDocument().encode(to: storage, forKey: key)
     }
 
     /// methods required by the BsonValue protocol that we don't actually need/use. MutableDictionary
     /// is just a BsonValue to simplify usage alongside true BsonValues within the encoder.
-    static func from(iter: inout bson_iter_t) -> BsonValue {
-        fatalError("`MutableDictionary` is not meant to be initialized from a `bson_iter_t`")
+    required init(from iter: Document.Iterator) throws {
+        fatalError("`MutableDictionary` is not meant to be initialized from a `DocumentIterator`")
     }
     func encode(to encoder: Encoder) throws {
         fatalError("`MutableDictionary` is not meant to be encoded with an `Encoder`")
